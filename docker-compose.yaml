@@ -1,6 +1,6 @@
 services:
   auth-app:
-    build: .
+    build: ollama-auth
     container_name: auth-service
     volumes:
       - ollama_data:/root/.ollama

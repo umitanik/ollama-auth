@@ -17,7 +17,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip3 install -r requirements.txt --break-system-packages
 
-COPY auth-app/ .
+COPY auth-app .
 
 ENV OLLAMA_HOST=0.0.0.0
 ENV PYTHONPATH=/app
