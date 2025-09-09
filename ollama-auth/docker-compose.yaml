@@ -1,0 +1,28 @@
+services:
+  auth-app:
+    build: .
+    container_name: auth-service
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_PORT=11434
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:alpine
+    container_name: caddy-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - auth-app
+
+volumes:
+  ollama_data:
+  caddy_data:
+  caddy_config:
