@@ -125,6 +125,5 @@ async def health():
     except Exception as e:
         return {"status": "unhealthy", "ollama_connection": "disconnected", "error": str(e)}
 
-
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
