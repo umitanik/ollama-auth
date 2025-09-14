@@ -21,6 +21,7 @@ RATE_LIMIT_PER_HOUR = int(os.getenv("RATE_LIMIT_PER_HOUR", "50"))
 
 user_requests = defaultdict(lambda: {"count": 0, "reset_time": time.time()})
 
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=1000)
     model: str = Field(default="gemma3n:e4b", pattern="^[a-zA-Z0-9_:-]+$")
@@ -37,14 +38,14 @@ class ChatRequest(BaseModel):
         return v.strip()
 
 
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def verify_token_and_rate_limit(
+        request: Request,
+        credentials: HTTPAuthorizationCredentials = Depends(security)
+):
     if credentials.credentials != VALID_TOKEN:
-        logger.warning("SECURITY_ALERT: Invalid token attempt")
+        logger.warning(f"SECURITY_ALERT: Invalid token attempt from {request.client.host}")
         raise HTTPException(status_code=401, detail="Geçersiz token")
-    return True
 
-
-def rate_limit_check(request: Request):
     client_ip = request.client.host
     current_time = time.time()
 
@@ -61,6 +62,31 @@ def rate_limit_check(request: Request):
     return True
 
 
+@app.post("/validate")
+async def validate_token(request: Request):
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header:
+            raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+        if not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Invalid Authorization format")
+
+        token = auth_header.split(" ")[1]
+
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+        verify_token_and_rate_limit(request, credentials)
+
+        logger.info(f"AUTH_SUCCESS: Token validated for {request.client.host}")
+        return {"status": "authorized"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AUTH_ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail="Authentication error")
+
+
 @app.get("/")
 async def root():
     return {"message": "Ollama Gemma3n Secure Auth API", "version": "2.0-secure"}
@@ -70,19 +96,16 @@ async def root():
 async def chat(
         request: ChatRequest,
         http_request: Request,
-        authorized: bool = Depends(verify_token),
-        rate_limited: bool = Depends(rate_limit_check)
+        authorized: bool = Depends(verify_token_and_rate_limit)
 ):
-    # Security logging
-    logger.info(f"CHAT_REQUEST: IP={http_request.client.host}, Model={request.model}, MsgLen={len(request.message)}")
+    logger.info(f"CHAT_REQUEST: IP={http_request.client.host},"
+                f"Model={request.model},"
+                f"MsgLen={len(request.message)}")
 
     try:
         models_response = requests.get(f"{OLLAMA_URL}/api/tags")
         if models_response.status_code != 200:
-            pull_response = requests.post(f"{OLLAMA_URL}/api/pull",
-                                          json={"name": request.model})
-            if pull_response.status_code != 200:
-                raise HTTPException(status_code=500, detail="Model indirilemedi")
+            raise HTTPException(status_code=500, detail="Model Bulunamadı")
 
         response = requests.post(
             f"{OLLAMA_URL}/api/generate",
@@ -108,7 +131,7 @@ async def chat(
 
 
 @app.get("/models")
-async def get_models(authorized: bool = Depends(verify_token)):
+async def get_models(request: Request, authorized: bool = Depends(verify_token_and_rate_limit)):
     try:
         response = requests.get(f"{OLLAMA_URL}/api/tags")
         return response.json()

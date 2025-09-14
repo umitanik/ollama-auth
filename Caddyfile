@@ -1,11 +1,22 @@
-localhost:8080 {
+:8080 {
+    handle /api/* {
+        forward_auth auth-app:8000 {
+            uri /validate
+            copy_headers Authorization
+        }
+        
+        reverse_proxy host.docker.internal:11434
+    }
+
     reverse_proxy auth-app:8000
 
-    header X-Frame-Options DENY
-    header X-Content-Type-Options nosniff
-    header -Server
-}
-
-localhost:80 {
-    redir https://localhost:8080{uri} permanent
+    header {
+        X-Frame-Options DENY
+        X-Content-Type-Options nosniff
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+    
+    encode gzip zstd
 }

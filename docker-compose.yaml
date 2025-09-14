@@ -19,14 +19,18 @@ services:
     ports:
       - "80:80"
       - "8080:8080"
+      - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
+    environment:
+      - OLLAMA_ENDPOINT=host.docker.internal:11434
     networks:
       - app-network
     depends_on:
       - auth-app
+    restart: unless-stopped
 
 networks:
   app-network:
